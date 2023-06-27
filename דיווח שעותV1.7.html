@@ -1,0 +1,454 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>דיווח שעות</title>
+  <style>
+    /* Add CSS styles here */
+body {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  overflow: auto;
+font-family: 'Noto Serif Hebrew', serif; /* Add this line */
+}
+
+main {
+  width: 90%;
+  max-width: 900px;
+  padding: 50px;
+  border: 1px solid black;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  margin: 0 auto;
+  overflow: auto;
+  max-height: calc(100vh - 120px); /* Adjust the value as needed */
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+th,
+td {
+  padding: 8px;
+  text-align: center;
+  border: 1px solid black;
+  font-size: 20px;
+}
+
+thead th {
+  border-bottom: 2px solid black;
+}
+
+tbody tr:not(:last-child) {
+  border-bottom: 1px solid black;
+}
+
+td:not(:last-child) {
+  border-right: 1px solid black;
+}
+
+.missing-hours {
+  background-color: #ffcccc;
+}
+
+.over-hours {
+  background-color: #ccffcc;
+}
+
+.delete-button {
+  padding: 4px 8px;
+  background-color: #ff4d4d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.delete-button:hover {
+  background-color: #ff1a1a;
+}
+
+.edit-button {
+  padding: 4px 8px;
+  background-color: #ffcc99;
+  color: black;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.edit-button:hover {
+  background-color: #ffa366;
+}
+
+#timeForm {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 100px;
+}
+
+#timeForm label {
+  font-size: 24px;
+  flex: 0 0 100px;
+  text-align: right;
+  margin-right: 10px;
+  margin-bottom: 10px;
+}
+
+#timeForm .input-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+#timeForm .input-container > * {
+  margin-right: 20px;
+  font-size: 20px;
+}
+
+#timeForm button[type="submit"] {
+  padding: 6px 12px;
+  background-color: #4d79ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#timeForm button[type="submit"]:hover {
+  background-color: #1a53ff;
+}
+
+#timeForm button[type="submit"]:focus {
+  outline: none;
+}
+
+#totalsRow td {
+  font-weight: bold;
+}
+
+.missing-line td {
+  background-color: #ffcccc;
+}
+
+.extra-line td {
+  background-color: #ccffcc;
+}
+
+/* Media queries */
+@media only screen and (max-width: 600px) {
+  main {
+    padding: 20px;
+  }
+
+  table {
+    font-size: 16px;
+  }
+
+  #timeForm label {
+    flex: 0 0 100%;
+    margin-bottom: 10px;
+    text-align: left;
+  }
+
+  #timeForm .input-container > * {
+    margin-right: 0;
+    width: 100%;
+  }
+
+  #timeForm button[type="submit"] {
+    margin-top: 10px;
+  }
+}
+ </style>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Hebrew&display=swap" rel="stylesheet"></head>
+</head>
+<body>
+  <main>
+    <h1 style="text-align: center;FONT-SIZE:48PX;">דיווח שעות</h1>
+
+    <form id="timeForm">
+      <label for="date">תאריך</label>
+      <input type="date" id="date" name="date">
+
+      <label for="entryTime">כניסה:</label>
+      <input type="time" id="entryTime" name="entryTime">
+
+      <label for="exitTime">יציאה:</label>
+      <input type="time" id="exitTime" name="exitTime">
+
+      <button type="submit">עדכן</button>
+    </form>
+
+    <table id="timeTable">
+      <thead>
+        <tr>
+          <th>תאריך</th>
+          <th>יום</th>
+          <th>כניסה</th>
+          <th>יציאה</th>
+          <th>עבודה</th>
+          <th>היעדרות</th>
+          <th>נוספות</th>
+          <th>פעולות</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Table rows will be dynamically added here -->
+      </tbody>
+      <tfoot>
+        <tr id="totalsRow">
+          <td colspan="5">סה"כ:</td>
+          <td colspan="1" id="timeMissingTotal">0 minutes</td>
+          <td colspan="1" id="timeOverTotal">0 minutes</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    <button onclick="savePage()">שמור דף</button>
+  </main>
+
+<script>
+  const form = document.getElementById('timeForm');
+  const table = document.getElementById('timeTable');
+  const tbody = table.querySelector('tbody');
+  const timeMissingTotal = document.getElementById('timeMissingTotal');
+  const timeOverTotal = document.getElementById('timeOverTotal');
+
+  let timeEntries = [];
+
+  // Load saved data when the page is loaded
+  window.addEventListener('DOMContentLoaded', function () {
+    const savedData = localStorage.getItem('timeEntries');
+
+    if (savedData) {
+      timeEntries = JSON.parse(savedData);
+      renderTimeEntries();
+      updateTotalTime();
+    }
+  });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    // Get form values
+    const date = document.getElementById('date').value;
+    const entryTime = document.getElementById('entryTime').value;
+    const exitTime = document.getElementById('exitTime').value;
+
+    // Calculate the time difference
+    const diff = Math.abs(new Date(`1970/01/01 ${exitTime}`) - new Date(`1970/01/01 ${entryTime}`));
+    const calculatedTime = new Date(diff).toISOString().substr(11, 8);
+
+    // Get the day of the week and check if it's Sunday
+    const dayOfWeek = new Date(date).getDay();
+    const isSunday = dayOfWeek === 0;
+
+    // Calculate the minimum hours based on the day of the week
+    const minimumHours = isSunday ? '8:30' : '9:00';
+
+    // Check if the minimum hours requirement is met
+    const overHours = new Date(`1970/01/01 ${calculatedTime}`) > new Date(`1970/01/01 ${minimumHours}`);
+    const timeDifference = Math.abs(new Date(`1970/01/01 ${minimumHours}`) - new Date(`1970/01/01 ${calculatedTime}`));
+    const timeMissing = overHours ? '' : new Date(timeDifference).toISOString().substr(11, 5);
+    const timeOver = overHours ? new Date(timeDifference).toISOString().substr(11, 5) : '';
+
+    // Update the total missing and over time
+    updateTotalTime();
+
+    // Create a new time entry object
+    const newEntry = {
+      date,
+      selectedDay: '',
+      entryTime,
+      exitTime,
+      calculatedTime,
+      timeMissing,
+      timeOver,
+      minimumHours
+    };
+
+    // Add the new entry to the array
+    timeEntries.push(newEntry);
+
+    // Save the updated data
+    saveData();
+
+    // Render the time entries
+    renderTimeEntries();
+
+    // Reset the form
+    form.reset();
+  });
+
+  function renderTimeEntries() {
+    // Clear the table body before rendering the entries
+    tbody.innerHTML = '';
+
+    // Render each time entry as a table row
+    timeEntries.forEach(entry => {
+      const newRow = document.createElement('tr');
+      newRow.innerHTML = `
+        <td contenteditable>${entry.date}</td>
+        <td contenteditable>${entry.selectedDay}</td>
+        <td contenteditable oninput="updateTime(this)">${entry.entryTime}</td>
+        <td contenteditable oninput="updateTime(this)">${entry.exitTime}</td>
+        <td>${entry.calculatedTime}</td>
+        <td>${entry.timeMissing}</td>
+        <td>${entry.timeOver}</td>
+        <td><button class="delete-button" onclick="deleteTimeEntry(this)">מחק</button></td>
+      `;
+
+      // Check if there is missing or extra time
+      if (entry.timeMissing && entry.timeMissing !== "00:00") {
+        newRow.classList.add('missing-line');
+      } else if (entry.timeOver) {
+        newRow.classList.add('extra-line');
+      }
+
+      // Append the new row to the table
+      tbody.appendChild(newRow);
+
+      // Update the day of the week in the second column
+      const dateCell = newRow.querySelector('td:first-child');
+      const dateValue = dateCell.innerText;
+      const dayOfWeek = new Date(dateValue).getDay();
+      const daysOfWeek = ['יום ראשון', 'יום שני', 'יום שלישי', 'יום רביעי', 'יום חמישי', 'יום שישי', 'שבת'];
+      const dayName = daysOfWeek[dayOfWeek];
+      newRow.children[1].innerText = dayName;
+    });
+  }
+
+  function updateTime(cell) {
+    const row = cell.parentNode;
+    const entryTimeCell = row.cells[2];
+    const exitTimeCell = row.cells[3];
+    const calculatedTimeCell = row.cells[4];
+    const timeMissingCell = row.cells[5];
+    const timeOverCell = row.cells[6];
+
+    const entryTime = entryTimeCell.innerText.trim();
+    const exitTime = exitTimeCell.innerText.trim();
+    const date = row.cells[0].innerText;
+
+    // Calculate the time difference
+    const diff = Math.abs(new Date(`1970/01/01 ${exitTime}`) - new Date(`1970/01/01 ${entryTime}`));
+    const calculatedTime = new Date(diff).toISOString().substr(11, 8);
+
+    // Get the day of the week and check if it's Sunday
+    const dayOfWeek = new Date(date).getDay();
+    const isSunday = dayOfWeek === 0;
+
+    // Calculate the minimum hours based on the day of the week
+    const minimumHours = isSunday ? '8:30' : '9:00';
+
+    // Check if the minimum hours requirement is met
+    const overHours = new Date(`1970/01/01 ${calculatedTime}`) > new Date(`1970/01/01 ${minimumHours}`);
+    const timeDifference = Math.abs(new Date(`1970/01/01 ${minimumHours}`) - new Date(`1970/01/01 ${calculatedTime}`));
+    const timeMissing = overHours ? '' : new Date(timeDifference).toISOString().substr(11, 5);
+    const timeOver = overHours ? new Date(timeDifference).toISOString().substr(11, 5) : '';
+
+    // Update the cells
+    calculatedTimeCell.innerText = calculatedTime;
+    timeMissingCell.innerText = timeMissing;
+    timeOverCell.innerText = timeOver;
+
+    // Update the entry in the timeEntries array
+    const rowIndex = Array.from(tbody.rows).indexOf(row);
+    timeEntries[rowIndex].entryTime = entryTime;
+    timeEntries[rowIndex].exitTime = exitTime;
+    timeEntries[rowIndex].calculatedTime = calculatedTime;
+    timeEntries[rowIndex].timeMissing = timeMissing;
+    timeEntries[rowIndex].timeOver = timeOver;
+
+    // Update the row color based on missing or extra hours
+    row.classList.remove('missing-line', 'extra-line');
+    if (timeMissing) {
+      row.classList.add('missing-line');
+    } else if (timeOver) {
+      row.classList.add('extra-line');
+    }
+
+    // Update the total time
+    updateTotalTime();
+
+    // Save the updated data
+    saveData();
+  }
+ 
+  function deleteTimeEntry(button) {
+    // Find the corresponding table row and remove it
+    const row = button.closest('tr');
+    row.remove();
+
+    // Find the index of the entry in the array
+    const index = Array.from(tbody.children).indexOf(row);
+
+    // Remove the entry from the array
+    timeEntries.splice(index, 1);
+
+    // Save the updated data
+    saveData();
+
+    // Update the total time
+    updateTotalTime();
+  }
+
+  function updateTotalTime() {
+    let totalMissing = 0;
+    let totalOver = 0;
+
+    // Iterate through each time entry and update the total missing and over time
+    timeEntries.forEach(entry => {
+      if (entry.timeMissing) {
+        totalMissing += getMillisecondsFromTimeString(entry.timeMissing);
+      }
+      if (entry.timeOver) {
+        totalOver += getMillisecondsFromTimeString(entry.timeOver);
+      }
+    });
+
+    timeMissingTotal.textContent = `${Math.floor(totalMissing / 60000)} minutes`;
+    timeOverTotal.textContent = `${Math.floor(totalOver / 60000)} minutes`;
+  }
+
+  function getMillisecondsFromTimeString(timeString) {
+    const [hours, minutes] = timeString.split(':');
+    return (parseInt(hours) * 60 + parseInt(minutes)) * 60000;
+  }
+
+  function saveData() {
+    // Save the timeEntries array to local storage
+    localStorage.setItem('timeEntries', JSON.stringify(timeEntries));
+  }
+
+  function savePage() {
+    // Get the page content
+    var pageContent = document.documentElement.outerHTML;
+
+    // Create a temporary element to hold the content
+    var tempElement = document.createElement('a');
+    tempElement.setAttribute('href', 'data:text/html;charset=windows-1255,' + encodeURIComponent(pageContent));
+    tempElement.setAttribute('download', 'time_report.html');
+    tempElement.style.display = 'none';
+
+    // Add the element to the document
+    document.body.appendChild(tempElement);
+
+    // Simulate a click to download the file
+    tempElement.click();
+
+    // Clean up
+    document.body.removeChild(tempElement);
+  }
+</script>
+</body>
+</html>
